@@ -48,16 +48,16 @@ CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 Lancez enfin l’API :
 
 ```powershell
-uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload --port 8001
 ```
 
-Le backend est prêt lorsque le terminal affiche que le serveur écoute sur `http://127.0.0.1:8000`.
+Le backend est prêt lorsque le terminal affiche que le serveur écoute sur `http://127.0.0.1:8001`.
 
 Pages utiles :
 
-- API : [http://127.0.0.1:8000](http://127.0.0.1:8000)
-- État de santé : [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
-- Documentation interactive Swagger : [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- API : [http://127.0.0.1:8001](http://127.0.0.1:8001)
+- État de santé : [http://127.0.0.1:8001/health](http://127.0.0.1:8001/health)
+- Documentation interactive Swagger : [http://127.0.0.1:8001/docs](http://127.0.0.1:8001/docs)
 
 La base de données `scrum_ai.db` est créée automatiquement dans le dossier `backend` au premier lancement. Ne commitez ni cette base ni le fichier `.env`.
 
@@ -84,7 +84,7 @@ Vite affiche une URL, normalement [http://localhost:5173](http://localhost:5173)
 
 ## 4. Tester le parcours IA via Swagger
 
-Dans [Swagger](http://127.0.0.1:8000/docs), utilisez les routes dans cet ordre :
+Dans [Swagger](http://127.0.0.1:8001/docs), utilisez les routes dans cet ordre :
 
 1. `POST /api/v1/projects` : créez un projet avec un nom et une description détaillée.
 2. `POST /api/v1/projects/{project_id}/clarifications/start` : obtenez la première question du Product Owner.
@@ -128,7 +128,7 @@ pytest -q
 Le frontend est connecté au backend FastAPI. Son fichier `front/.env` définit l’URL utilisée :
 
 ```env
-VITE_API_URL=http://127.0.0.1:8000/api/v1
+VITE_API_URL=http://127.0.0.1:8001/api/v1
 ```
 
 L’interface appelle réellement l’API pour créer un projet, répondre aux clarifications IA, générer le plan et sauvegarder les déplacements de cartes Kanban. Démarrez donc toujours le backend avant le frontend.
@@ -139,6 +139,6 @@ L’interface appelle réellement l’API pour créer un projet, répondre aux c
 | --- | --- |
 | Réponse `503` des routes IA | Vérifiez que `GEMINI_API_KEY` est renseignée dans `backend/.env`, puis redémarrez le backend. |
 | Réponse `502` des routes IA | Consultez `GET /api/v1/projects/{project_id}/agent-runs` pour voir l’agent et l’erreur concernés. |
-| Port 8000 déjà utilisé | Lancez `uvicorn app.main:app --reload --port 8001`. |
+| Port 8001 déjà utilisé | Lancez `python -m uvicorn app.main:app --reload --port 8002` et adaptez `VITE_API_URL` dans `front/.env`. |
 | Le frontend ne démarre pas | Supprimez `front/node_modules`, puis exécutez à nouveau `npm install`. |
 | Le navigateur bloque l’API | Vérifiez que le frontend utilise `http://localhost:5173` ou ajoutez son origine à `CORS_ORIGINS` dans `.env`. |

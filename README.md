@@ -6,23 +6,80 @@ https://trello.com/invite/b/6adb04ce2f11e2e78bc3badc/ATTIf6ad3101412ddb56d6bba2c
 
 Pydantic ou Langchain
 
+## Lancer le projet
+
+Le projet est composé de deux applications à lancer dans deux terminaux PowerShell :
+
+- `backend` : API FastAPI, authentification, agents Gemini et base SQLite ;
+- `front` : interface React/Vite.
+
+### Prérequis
+
+- Python 3.10 ou plus récent ;
+- Node.js LTS et npm ;
+- une clé API Gemini pour utiliser le chat et la génération IA.
+
+Créez une clé Gemini depuis [Google AI Studio](https://aistudio.google.com/app/apikey). Ne la committez jamais et ne la partagez pas.
+
+### 1. Installer et lancer le backend
+
+```powershell
+cd "C:\Users\FABIE\Desktop\Nouveau dossier (5)\TP_Agile\backend"
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Ouvrez `backend/.env` et renseignez votre clé Gemini :
+
+```env
+GEMINI_API_KEY=votre-cle-api-gemini
+AGENT_MODEL=gemini-2.5-flash
+DATABASE_URL=sqlite:///./scrum_ai.db
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
+
+Lancez ensuite FastAPI sur le port utilisé par le frontend :
+
+```powershell
+python -m uvicorn app.main:app --reload --port 8001
+```
+
+Vérifiez que l'API répond sur [http://127.0.0.1:8001/health](http://127.0.0.1:8001/health).
+
+### 2. Installer et lancer le frontend
+
+Dans un second terminal :
+
+```powershell
+cd "C:\Users\FABIE\Desktop\Nouveau dossier (5)\TP_Agile\front"
+npm install
+Copy-Item .env.example .env
+```
+
+Vérifiez que `front/.env` contient :
+
+```env
+VITE_API_URL=http://127.0.0.1:8001/api/v1
+```
+
+Puis lancez l'interface :
+
+```powershell
+npm run dev
+```
+
+Ouvrez l'URL affichée par Vite, généralement [http://127.0.0.1:5173](http://127.0.0.1:5173).
+
+Sans `GEMINI_API_KEY`, l'inscription, la connexion et le CRUD restent disponibles, mais le chat et la génération IA retournent une erreur `503`.
+
 ## Backend FastAPI
 
 Le backend est dans [`backend`](backend). Il met en œuvre quatre agents spécialisés, des contrats Pydantic entre eux, SQLite pour la persistance et une orchestration traçable. Les prompts modifiables sont séparés dans `backend/prompts/agent_*_prompt.txt`.
 
-### Démarrage
-
-```powershell
-cd backend
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-Copy-Item .env.example .env
-# renseigner GEMINI_API_KEY dans .env
-uvicorn app.main:app --reload
-```
-
-La documentation interactive est disponible sur `http://127.0.0.1:8000/docs`.
+La documentation interactive est disponible sur `http://127.0.0.1:8001/docs`.
 
 Les routes principales sont :
 
@@ -33,7 +90,7 @@ Les routes principales sont :
 - `PATCH /api/v1/projects/{id}/tasks/{task_id}` — sauvegarde une modification manuelle ; elle est préservée lors d'une régénération.
 - `GET /api/v1/projects/{id}/agent-runs` — trace des exécutions IA.
 
-`gemini-2.5-flash` est le modèle par défaut, configurable via `AGENT_MODEL`. Sans clé Gemini, le CRUD reste disponible et les routes IA retournent `503` avec une explication.
+`gemini-2.5-flash` est le modèle par défaut, configurable via `AGENT_MODEL`.
 
 # PROMPT DE RÉFÉRENCE — PROJET SCRUM AUTOMATISÉ PAR IA
 
