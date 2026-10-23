@@ -6,6 +6,8 @@ https://trello.com/invite/b/6adb04ce2f11e2e78bc3badc/ATTIf6ad3101412ddb56d6bba2c
 
 Pydantic ou Langchain
 
+démarage du projet en CLI : ```python3.13 -m backend.cli```
+
 # PROMPT DE RÉFÉRENCE — PROJET SCRUM AUTOMATISÉ PAR IA
 
 ## 1. Contexte général du projet
@@ -378,3 +380,47 @@ Si une décision importante n'est pas définie, il faut la signaler et proposer 
 Les recommandations doivent distinguer les exigences déjà définies, les choix proposés et les points restant à valider.
 
 L'objectif commun est de construire une application modulaire, cohérente et évolutive, capable d'automatiser la préparation et l'organisation d'un projet agile grâce à plusieurs agents IA collaboratifs, tout en conservant une interface de contrôle claire pour l'utilisateur.
+
+## Backend multi-agents (première version)
+
+Le backend Python propose un parcours en ligne de commande : il demande l'intitulé du projet, le transmet au Product Owner, puis orchestre les agents User Stories, backlog et Scrum. Les échanges entre agents sont des modèles Pydantic validés. L'agent Scrum termine le parcours en affichant le plan complet au format JSON.
+
+Le modèle unique utilisé par tous les agents est `gemini-2.5-flash-lite`, via l'API Gemini. Les réponses structurées sont validées avec Pydantic. Le Product Owner doit signaler les informations inconnues au lieu d'inventer des contraintes, et le système vérifie les références entre User Stories, tâches, dépendances et sprints avant d'afficher le résultat.
+
+### Lancer le backend
+
+Depuis la racine du dépôt, avec Python 3.11 ou plus récent :
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+Le backend utilise le modèle `gemini-2.5-flash-lite` via l'API Gemini. Ajoutez votre clé Gemini dans le fichier `.env` à la racine du dépôt :
+
+```dotenv
+GEMINI_API_KEY=votre-cle-gemini
+```
+
+Puis lancez :
+
+```powershell
+python -m backend.cli
+```
+
+Pour tester séparément la clé et l'accès à l'API Gemini, lancez :
+
+```powershell
+python -m backend.check_gemini_key
+```
+
+Ce test effectue une requête de génération minimale, qui peut entraîner un coût API minime. Une erreur HTTP 429 signifie que le quota ou la limite de débit Gemini est atteint.
+
+L'intitulé saisi dans le terminal est le seul renseignement demandé à cette première version. Les champs non fournis, comme l'effectif, le budget et l'échéance, restent inconnus ou sont signalés comme hypothèses explicites. Le backend ne calcule pas une capacité d'équipe exacte à partir du seul effectif.
+
+Les tests locaux des contrats et des contrôles inter-agents se lancent avec :
+
+```powershell
+python -m unittest discover -s tests
+```
