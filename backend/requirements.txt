@@ -1,0 +1,35 @@
+# Authentication Service Dependencies
+# TP_Agile Project
+
+# FastAPI and Uvicorn
+fastapi>=0.95.0
+uvicorn[standard]>=0.22.0
+
+# Pydantic for data validation (v2)
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+email-validator>=2.0.0
+
+# JWT for token handling
+pyjwt>=2.8.0
+
+# Password hashing
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0
+
+# SQLite database
+# (included in Python standard library, but we use aiysqlite for async support)
+aiosqlite>=0.19.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# HTTP client for potential external calls
+httpx>=0.24.0
+
+# Development dependencies (optional)
+# -r requirements-dev.txt
+
+# For production, you might also want:
+# gunicorn>=20.1.0
+# python-multipart>=0.0.6
