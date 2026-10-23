@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Screen = "login" | "signup" | "chat" | "generating" | "board";
 type Status = "backlog" | "todo" | "progress" | "review" | "done";
@@ -60,10 +60,29 @@ function Auth({ signup, go }: { signup?: boolean; go: (screen: Screen) => void }
   );
 }
 
-const questions = [
-  { id: 1, title: "Délai du projet", text: "Quel est le délai souhaité ?", choices: ["1 mois", "3 mois", "6 mois", "Flexible"] },
-  { id: 2, title: "Équipe", text: "Combien de développeurs seront disponibles ?", choices: ["1", "2", "3", "4", "5+"] },
-  { id: 3, title: "Plateforme", text: "Sur quelle plateforme souhaitez-vous lancer le produit ?", choices: ["Web", "Mobile", "Web + Mobile"] },
+type ChatMessage = { role: "user" | "assistant"; content: string };
+type Conversation = {
+  conversation_id: string;
+  status: "collecting" | "complete";
+  progress: { answered: number; total: number };
+  next_question: { id: string; title: string; text: string } | null;
+  messages: ChatMessage[];
+  summary?: {
+    confirmed: Record<string, string>;
+    unknown: string[];
+    hypotheses: string[];
+  };
+};
+type ApiError = { error: string };
+
+const conversationStorageKey = "planora-po-conversation";
+const answerFields = [
+  { id: "features", label: "Fonctionnalités principales" },
+  { id: "target_users", label: "Utilisateurs cibles" },
+  { id: "technical_constraints", label: "Contraintes techniques" },
+  { id: "developer_count", label: "Équipe disponible" },
+  { id: "budget", label: "Budget" },
+  { id: "deadline", label: "Date limite" },
 ];
 
 function Progress({ board = false }: { board?: boolean }) {
@@ -71,43 +90,157 @@ function Progress({ board = false }: { board?: boolean }) {
   return <div className="progress-steps">{steps.map((step, index) => <div className={(board || index < 2) ? "complete" : index === 2 ? "active" : ""} key={step}><i>{(board || index < 2) ? <Icon name="check" size={10}/> : null}</i><span>{step}</span></div>)}</div>;
 }
 
-function ProjectChat({ go }: { go: (screen: Screen) => void }) {
-  const [started, setStarted] = useState(false);
-  const [active, setActive] = useState<number | null>(null);
-  const [answered, setAnswered] = useState<number[]>([]);
+function ProjectChat() {
+  const [conversation, setConversation] = useState<Conversation | null>(null);
   const [input, setInput] = useState("");
-  const submitIdea = () => { if (input.trim()) { setStarted(true); setInput(""); } };
-  const answer = (id: number) => { setAnswered((items) => [...items, id]); setActive(null); };
-  const remaining = questions.length - answered.length;
+  const [sending, setSending] = useState(false);
+  const [restoring, setRestoring] = useState(true);
+  const [editingAnswers, setEditingAnswers] = useState(false);
+  const [editedAnswers, setEditedAnswers] = useState<Record<string, string>>({});
+  const [savingAnswers, setSavingAnswers] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const conversationId = localStorage.getItem(conversationStorageKey);
+    if (!conversationId) {
+      setRestoring(false);
+      return;
+    }
+
+    let cancelled = false;
+    fetch(`/api/conversations/${encodeURIComponent(conversationId)}`)
+      .then(async (response) => {
+        const payload: Conversation | ApiError = await response.json();
+        if (!response.ok || "error" in payload) {
+          throw new Error("error" in payload ? payload.error : "Impossible de retrouver la conversation.");
+        }
+        if (!cancelled) setConversation(payload);
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : "Impossible de retrouver la conversation.");
+      })
+      .finally(() => {
+        if (!cancelled) setRestoring(false);
+      });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  const submitMessage = async () => {
+    const message = input.trim();
+    if (!message || sending || restoring || conversation?.status === "complete") return;
+
+    setSending(true);
+    setError("");
+    try {
+      const endpoint = conversation
+        ? `/api/conversations/${encodeURIComponent(conversation.conversation_id)}/messages`
+        : "/api/conversations";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      const payload: Conversation | ApiError = await response.json();
+      if (!response.ok || "error" in payload) {
+        throw new Error("error" in payload ? payload.error : "Le message n’a pas pu être envoyé.");
+      }
+      localStorage.setItem(conversationStorageKey, payload.conversation_id);
+      setConversation(payload);
+      setInput("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Le service est momentanément indisponible.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const startEditingAnswers = () => {
+    if (!conversation?.summary) return;
+    const values: Record<string, string> = {
+      description: conversation.summary.confirmed["Description initiale"] ?? "",
+    };
+    for (const field of answerFields) {
+      values[field.id] = conversation.summary.confirmed[field.label] ?? "";
+    }
+    setEditedAnswers(values);
+    setEditingAnswers(true);
+    setError("");
+  };
+
+  const saveAnswers = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!conversation || savingAnswers) return;
+    setSavingAnswers(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/conversations/${encodeURIComponent(conversation.conversation_id)}/answers`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            description: editedAnswers.description,
+            answers: Object.fromEntries(answerFields.map((field) => [
+              field.id,
+              editedAnswers[field.id].trim() || null,
+            ])),
+          }),
+        },
+      );
+      const payload: Conversation | ApiError = await response.json();
+      if (!response.ok || "error" in payload) {
+        throw new Error("error" in payload ? payload.error : "Les modifications n’ont pas pu être enregistrées.");
+      }
+      setConversation(payload);
+      setEditingAnswers(false);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Impossible d’enregistrer les modifications.");
+    } finally {
+      setSavingAnswers(false);
+    }
+  };
 
   return (
     <main className="onboarding">
       <header className="app-header"><Brand/><Progress/><button className="avatar-button">AM</button></header>
       <section className="chat-stage">
-        <div className="stage-title"><span className="ai-orb"><Icon name="spark" size={24}/></span><h1>Votre Scrum Master IA</h1><p>Décrivez votre projet. Je vais vous aider à le transformer en un plan Scrum structuré.</p></div>
+        <div className="stage-title"><span className="ai-orb"><Icon name="spark" size={24}/></span><h1>Votre Product Owner IA</h1><p>Décrivez votre projet par écrit. Nous allons préciser vos besoins ensemble.</p></div>
         <div className="chat-thread">
-          <div className="ai-line"><span><Icon name="spark" size={16}/></span><div><strong>Scrum Master IA</strong><p>{started ? "J’ai compris l’objectif de votre projet. Il me manque encore quelques informations avant de construire votre backlog." : "Bonjour. Décrivez-moi votre projet avec vos propres mots. Je vais ensuite vous poser quelques questions pour comprendre vos besoins."}</p></div></div>
-          {started && <>
-            <div className="user-bubble">Je veux créer une application de livraison de repas pensée pour les étudiants.</div>
-            <section className="question-card">
-              <div className="question-heading"><div><span>Informations à compléter</span><h2>{remaining} élément{remaining > 1 ? "s" : ""} restant{remaining > 1 ? "s" : ""}</h2></div><strong>{answered.length}/{questions.length}</strong></div>
-              {questions.map((question) => {
-                const done = answered.includes(question.id);
-                return <article className={`${done ? "done" : ""} ${active === question.id ? "open" : ""}`} key={question.id}>
-                  <div className="question-index">{done ? <Icon name="check" size={14}/> : `0${question.id}`}</div>
-                  <div className="question-content"><h3>{question.title}</h3><p>{done ? "Information ajoutée au projet" : question.text}</p>
-                    {active === question.id && <div className="quick-choices">{question.choices.map((choice) => <button key={choice} onClick={() => answer(question.id)}>{choice}</button>)}</div>}
-                  </div>
-                  {!done && active !== question.id && <button className="answer-button" onClick={() => setActive(question.id)}>Répondre</button>}
-                </article>;
-              })}
-            </section>
-            {remaining === 0 && <div className="ready-card"><Icon name="check"/><div><strong>Le projet est suffisamment défini</strong><p>Je peux maintenant générer les User Stories, le backlog et les premiers sprints.</p></div><button className="primary" onClick={() => go("generating")}>Générer mon backlog<Icon name="arrow" size={16}/></button></div>}
+          <div className="ai-line"><span><Icon name="spark" size={16}/></span><div><strong>Product Owner IA</strong><p>Bonjour. Décrivez votre idée avec vos propres mots. Je vous poserai ensuite quelques questions pour préciser les besoins du projet.</p></div></div>
+          {conversation && <>
+            {conversation.messages.map((message, index) => message.role === "user"
+              ? <div className="user-bubble" key={`${message.role}-${index}`}>{message.content}</div>
+              : <div className="ai-line conversation-message" key={`${message.role}-${index}`}><span><Icon name="spark" size={16}/></span><div><strong>Product Owner IA</strong><p>{message.content}</p></div></div>)}
           </>}
+          {conversation?.next_question && <>
+            <section className="question-card">
+              <div className="question-heading"><div><span>Informations à compléter</span><h2>{conversation.progress.total - conversation.progress.answered} élément{conversation.progress.total - conversation.progress.answered > 1 ? "s" : ""} restant{conversation.progress.total - conversation.progress.answered > 1 ? "s" : ""}</h2></div><strong>{conversation.progress.answered}/{conversation.progress.total}</strong></div>
+              <article className="open">
+                <div className="question-index">{String(conversation.progress.answered + 1).padStart(2, "0")}</div>
+                <div className="question-content"><h3>{conversation.next_question.title}</h3><p>{conversation.next_question.text}</p></div>
+              </article>
+            </section>
+          </>}
+          {conversation?.status === "complete" && conversation.summary && <section className="summary-card">
+            <div className="summary-heading"><div><h2>Synthèse des besoins</h2><p>Les informations inconnues restent signalées, sans être inventées.</p></div>{!editingAnswers && <button className="answer-button" onClick={startEditingAnswers}>Modifier mes réponses</button>}</div>
+            {editingAnswers
+              ? <form className="summary-edit-form" onSubmit={(event) => void saveAnswers(event)}>
+                <label>Description du projet<textarea required maxLength={10000} value={editedAnswers.description ?? ""} onChange={(event) => setEditedAnswers((values) => ({ ...values, description: event.target.value }))}/></label>
+                {answerFields.map((field) => <label key={field.id}>{field.label}<textarea maxLength={10000} value={editedAnswers[field.id] ?? ""} placeholder="À préciser (laisser vide si inconnu)" onChange={(event) => setEditedAnswers((values) => ({ ...values, [field.id]: event.target.value }))}/></label>)}
+                <div className="summary-edit-actions"><button type="button" className="answer-button" onClick={() => { setEditingAnswers(false); setError(""); }} disabled={savingAnswers}>Annuler</button><button type="submit" className="primary" disabled={savingAnswers}>{savingAnswers ? "Enregistrement…" : "Enregistrer les modifications"}</button></div>
+              </form>
+              : <>
+                <h3>Informations confirmées</h3>
+                <dl>{Object.entries(conversation.summary.confirmed).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+                {conversation.summary.unknown.length > 0 && <><h3>À préciser</h3><ul>{conversation.summary.unknown.map((item) => <li key={item}>{item}</li>)}</ul></>}
+              </>}
+          </section>}
         </div>
-        {!started && <div className="idea-examples"><span>Essayez par exemple</span><button onClick={() => setInput("Je veux créer une application de livraison de repas pour les étudiants.")}>Application de livraison étudiante</button><button onClick={() => setInput("Je souhaite lancer une plateforme de réservation pour indépendants.")}>Plateforme de réservation</button></div>}
-        <div className="main-composer"><textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitIdea(); }}} placeholder="Décrivez votre projet..."/><button onClick={submitIdea}><Icon name="send" size={18}/></button></div>
-        <p className="composer-note">Vos réponses restent modifiables à tout moment</p>
+        {!conversation && <div className="idea-examples"><span>Essayez par exemple</span><button onClick={() => setInput("Je veux créer une application de livraison de repas pour les étudiants.")}>Application de livraison étudiante</button><button onClick={() => setInput("Je souhaite lancer une plateforme de réservation pour indépendants.")}>Plateforme de réservation</button></div>}
+        {error && <p className="chat-error" role="alert">{error}</p>}
+        <div className="main-composer"><textarea value={input} disabled={sending || conversation?.status === "complete"} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void submitMessage(); }}} placeholder={conversation?.next_question?.text ?? "Décrivez votre projet..."} aria-label="Votre message au Product Owner"/><button onClick={() => void submitMessage()} disabled={sending || restoring || conversation?.status === "complete"} aria-label="Envoyer le message"><Icon name="send" size={18}/></button></div>
+        <p className="composer-note">{restoring ? "Restauration de votre conversation…" : sending ? "Envoi de votre réponse…" : "Votre conversation est enregistrée et pourra être reprise plus tard."}</p>
       </section>
     </main>
   );
@@ -151,7 +284,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("login");
   if (screen === "login") return <Auth go={setScreen}/>;
   if (screen === "signup") return <Auth signup go={setScreen}/>;
-  if (screen === "chat") return <ProjectChat go={setScreen}/>;
+  if (screen === "chat") return <ProjectChat/>;
   if (screen === "generating") return <Generating go={setScreen}/>;
   return <Board/>;
 }

@@ -378,3 +378,30 @@ Si une décision importante n'est pas définie, il faut la signaler et proposer 
 Les recommandations doivent distinguer les exigences déjà définies, les choix proposés et les points restant à valider.
 
 L'objectif commun est de construire une application modulaire, cohérente et évolutive, capable d'automatiser la préparation et l'organisation d'un projet agile grâce à plusieurs agents IA collaboratifs, tout en conservant une interface de contrôle claire pour l'utilisateur.
+
+
+
+## Première version du dialogue écrit avec le Product Owner
+
+Le premier parcours permet de décrire un projet par écrit, puis de préciser les fonctionnalités, les utilisateurs cibles, les contraintes techniques, la taille de l'équipe, le budget et la date limite. Les échanges et les réponses sont conservés dans une base SQLite locale. Les informations inconnues restent signalées dans la synthèse plutôt que d'être inventées.
+
+Le dialogue est pour l'instant guidé par des questions prédéfinies : aucun modèle d'IA n'est encore connecté et Pydantic n'est pas utilisé. Le contrat JSON du backend pourra être validé avec Pydantic lors de l'ajout de l'intégration IA.
+
+Installation et lancement du backend depuis la racine du projet sous Windows :
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+.\.venv\Scripts\python.exe backend\app.py
+```
+
+Dans un autre terminal, installer les dépendances frontend puis le démarrer :
+
+```powershell
+Set-Location front
+npm.cmd install
+npm.cmd run dev
+```
+
+Le serveur Vite transmet les requêtes `/api` au backend local sur le port `5000`.
+L’interface est disponible à l’adresse affichée par Vite (par défaut `http://localhost:8443`).
