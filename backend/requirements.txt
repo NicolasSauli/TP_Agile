@@ -1,0 +1,5 @@
+fastapi[standard]>=0.115,<1.0
+sqlalchemy>=2.0,<3.0
+pydantic>=2.8,<3.0
+pydantic-settings>=2.4,<3.0
+google-genai>=1.30,<2.0

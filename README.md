@@ -6,6 +6,35 @@ https://trello.com/invite/b/6adb04ce2f11e2e78bc3badc/ATTIf6ad3101412ddb56d6bba2c
 
 Pydantic ou Langchain
 
+## Backend FastAPI
+
+Le backend est dans [`backend`](backend). Il met en œuvre quatre agents spécialisés, des contrats Pydantic entre eux, SQLite pour la persistance et une orchestration traçable. Les prompts modifiables sont séparés dans `backend/prompts/agent_*_prompt.txt`.
+
+### Démarrage
+
+```powershell
+cd backend
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+# renseigner GEMINI_API_KEY dans .env
+uvicorn app.main:app --reload
+```
+
+La documentation interactive est disponible sur `http://127.0.0.1:8000/docs`.
+
+Les routes principales sont :
+
+- `POST /api/v1/projects` — crée un projet.
+- `POST /api/v1/projects/{id}/clarifications/start` — démarre le questionnaire adaptatif.
+- `POST /api/v1/projects/{id}/clarifications` — envoie une réponse au Product Owner IA et retourne une unique question suivante.
+- `POST /api/v1/projects/{id}/generate` — lance Product Owner → User Stories → Backlog → Scrum.
+- `PATCH /api/v1/projects/{id}/tasks/{task_id}` — sauvegarde une modification manuelle ; elle est préservée lors d'une régénération.
+- `GET /api/v1/projects/{id}/agent-runs` — trace des exécutions IA.
+
+`gemini-2.5-flash` est le modèle par défaut, configurable via `AGENT_MODEL`. Sans clé Gemini, le CRUD reste disponible et les routes IA retournent `503` avec une explication.
+
 # PROMPT DE RÉFÉRENCE — PROJET SCRUM AUTOMATISÉ PAR IA
 
 ## 1. Contexte général du projet
